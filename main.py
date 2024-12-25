@@ -1,9 +1,11 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 import json
 import math
 from PIL import Image, ImageTk
 import time
+import os
+from PIL import ImageGrab
 
 class TowerDefenseGame:
     def __init__(self, root):
@@ -51,6 +53,10 @@ class TowerDefenseGame:
         
         # Tower selection
         self.selected_tower = None  # Track the currently selected tower
+        
+        # Start and End entities
+        self.start_entity = None
+        self.end_entity = None
         
         self.setup_ui()
         self.load_images()
@@ -102,8 +108,9 @@ class TowerDefenseGame:
         self.pause_button = ttk.Button(self.button_frame, text="Pause", command=self.toggle_pause)
         self.pause_button.pack(side='left', padx=2)
         
-        # Add start wave button
-        self.start_wave_button = ttk.Button(self.button_frame, text="Start Wave", command=self.start_wave)
+        # Add start wave button with dark green background and bigger text
+        self.start_wave_button = tk.Button(self.button_frame, text="Start Wave", command=self.start_wave,
+                                        bg='darkgreen', fg='white', font=("Arial", 12, "bold"))
         self.start_wave_button.pack(side='left', padx=2)
         
         # Add upgrade tower button
@@ -118,11 +125,25 @@ class TowerDefenseGame:
         self.tools_frame = ttk.LabelFrame(self.main_frame, text="Editor Tools", height=50)
         self.tools_frame.pack(fill='x', pady=5)
         
-        self.path_button = ttk.Button(self.tools_frame, text="Path Tool", command=lambda: self.set_tool("path"))
+        # Path Tool button with blue background and bold text
+        self.path_button = tk.Button(self.tools_frame, text="Path", command=lambda: self.set_tool("path"),
+                                    bg='red', fg='white', font=("Arial", 10, "bold"))
         self.path_button.pack(side='left', padx=5)
         
-        self.tower_button = ttk.Button(self.tools_frame, text="Tower Tool", command=lambda: self.set_tool("tower"))
+        # Tower Tool button with blue background and bold text
+        self.tower_button = tk.Button(self.tools_frame, text="Tower", command=lambda: self.set_tool("tower"),
+                                    bg='blue', fg='white', font=("Arial", 10, "bold"))
         self.tower_button.pack(side='left', padx=5)
+        
+        # Start Tool button with yellow background and bold text
+        self.start_button = tk.Button(self.tools_frame, text="Start", command=lambda: self.set_tool("start"),
+                                    bg='yellow', fg='black', font=("Arial", 10, "bold"))
+        self.start_button.pack(side='left', padx=5)
+        
+        # End Tool button with yellow background and bold text
+        self.end_button = tk.Button(self.tools_frame, text="End", command=lambda: self.set_tool("end"),
+                                    bg='yellow', fg='black', font=("Arial", 10, "bold"))
+        self.end_button.pack(side='left', padx=5)
         
         self.clear_button = ttk.Button(self.tools_frame, text="Clear All", command=self.clear_level)
         self.clear_button.pack(side='left', padx=5)
@@ -136,7 +157,7 @@ class TowerDefenseGame:
         self.view_menu = tk.Menu(self.settings_menu, tearoff=0)
         self.settings_menu.add_cascade(label="Settings", menu=self.view_menu)
         self.view_menu.add_checkbutton(label="Show Enemy Health", command=self.toggle_enemy_health_visibility,
-                                       variable=tk.BooleanVar(value=self.show_enemy_health))
+                                    variable=tk.BooleanVar(value=self.show_enemy_health))
     
     def load_images(self):
         # Create placeholder images (in a real game, you'd load actual images)
@@ -179,6 +200,34 @@ class TowerDefenseGame:
             self.towers.append(Tower(grid_x, grid_y))
             self.money -= self.TOWER_COST
             self.update_labels()
+        elif self.selected_tool == "start":
+            if self.start_entity:
+                self.canvas.delete(self.start_entity)
+            self.start_entity = self.canvas.create_polygon(
+                x - 25, y + 15, x, y - 25, x + 25, y + 15,
+                fill='yellow', outline='black', tags='start'
+            )
+            self.canvas.create_text(
+                x + 2, y + 2, text='S', fill='black', font=("Arial", 16, "bold"), tags='start'
+            )
+            self.canvas.create_text(
+                x, y, text='S', fill='black', font=("Arial", 16, "bold"), tags='start'
+            )
+            self.start_position = (x, y)
+        elif self.selected_tool == "end":
+            if self.end_entity:
+                self.canvas.delete(self.end_entity)
+            self.end_entity = self.canvas.create_polygon(
+                x - 25, y - 15, x, y + 25, x + 25, y - 15,
+                fill='yellow', outline='black', tags='end'
+            )
+            self.canvas.create_text(
+                x + 2, y + 2, text='E', fill='black', font=("Arial", 16, "bold"), tags='end'
+            )
+            self.canvas.create_text(
+                x, y, text='E', fill='black', font=("Arial", 16, "bold"), tags='end'
+            )
+            self.end_position = (x, y)
         else:
             # Check if a tower is clicked for selection
             for tower in self.towers:
@@ -208,34 +257,94 @@ class TowerDefenseGame:
             self.tools_frame.pack(fill='x', pady=5)
             self.pause_button.config(state='disabled')
             self.game_paused = True
+            self.draw_arrows_on_path()  # Start drawing arrows
         else:
             self.tools_frame.pack_forget()
             self.pause_button.config(state='normal')
             self.game_paused = False
+            self.canvas.delete('arrow')  # Clear arrows when exiting editor mode
     
     def set_tool(self, tool):
         self.selected_tool = tool
     
     def save_level(self):
+        level_name = simpledialog.askstring("Save Level", "Enter a name for the level:")
+        if not level_name:
+            return
+
         level_data = {
             "path": self.enemy_path,
-            "towers": [(tower.x, tower.y) for tower in self.towers]
+            "towers": [(tower.x, tower.y) for tower in self.towers],
+            "start": self.start_position,
+            "end": self.end_position
         }
-        try:
-            with open("level.json", "w") as f:
-                json.dump(level_data, f)
-            messagebox.showinfo("Success", "Level saved successfully!")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save level: {str(e)}")
+
+        # Create the levels folder if it doesn't exist
+        if not os.path.exists("levels"):
+            os.makedirs("levels")
+
+        # Save the level data
+        level_file = os.path.join("levels", f"{level_name}.json")
+        with open(level_file, "w") as f:
+            json.dump(level_data, f)
+
+        # Generate a thumbnail
+        x = self.root.winfo_rootx() + self.canvas.winfo_x()
+        y = self.root.winfo_rooty() + self.canvas.winfo_y()
+        x1 = x + self.canvas.winfo_width()
+        y1 = y + self.canvas.winfo_height()
+        ImageGrab.grab().crop((x, y, x1, y1)).save(os.path.join("levels", f"{level_name}_thumb.png"))
+
+        messagebox.showinfo("Success", "Level saved successfully!")
     
     def load_level(self):
+        # Create the levels folder if it doesn't exist
+        if not os.path.exists("levels"):
+            os.makedirs("levels")
+
+        # Get all level files
+        level_files = [f for f in os.listdir("levels") if f.endswith(".json")]
+
+        if not level_files:
+            messagebox.showinfo("Info", "No levels available to load.")
+            return
+
+        # Create a new window to display the levels
+        load_window = tk.Toplevel(self.root)
+        load_window.title("Load Level")
+
+        # Create a frame to hold the level thumbnails and names
+        level_frame = ttk.Frame(load_window)
+        level_frame.pack(fill='both', expand=True)
+
+        # Load and display each level with its thumbnail
+        for level_file in level_files:
+            level_name = level_file.replace(".json", "")
+            thumbnail_path = os.path.join("levels", f"{level_name}_thumb.png")
+
+            if os.path.exists(thumbnail_path):
+                thumbnail = Image.open(thumbnail_path)
+                thumbnail = thumbnail.resize((100, 100), Image.ANTIALIAS)
+                thumbnail = ImageTk.PhotoImage(thumbnail)
+
+                # Create a button with the thumbnail
+                level_button = ttk.Button(level_frame, image=thumbnail, text=level_name, compound=tk.BOTTOM,
+                                          command=lambda lf=level_file: self.load_selected_level(lf, load_window))
+                level_button.image = thumbnail  # Keep a reference to avoid garbage collection
+                level_button.pack(side='left', padx=5, pady=5)
+
+    def load_selected_level(self, level_file, load_window):
         try:
-            with open("level.json", "r") as f:
+            with open(os.path.join("levels", level_file), "r") as f:
                 level_data = json.load(f)
                 self.enemy_path = level_data["path"]
                 self.towers = [Tower(x, y) for x, y in level_data["towers"]]
+                self.start_position = level_data["start"]
+                self.end_position = level_data["end"]
                 self.draw_path()
+                self.draw_start_end()
             messagebox.showinfo("Success", "Level loaded successfully!")
+            load_window.destroy()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load level: {str(e)}")
     
@@ -244,6 +353,8 @@ class TowerDefenseGame:
         self.towers = []
         self.enemies = []
         self.projectiles = []
+        self.start_entity = None
+        self.end_entity = None
         self.canvas.delete('all')
     
     def toggle_pause(self):
@@ -345,7 +456,7 @@ class TowerDefenseGame:
             time.time() * 1000 - self.last_spawn_time >= self.SPAWN_INTERVAL):
             
             # Create enemy with increased stats based on wave number
-            enemy = Enemy(self.enemy_path)
+            enemy = Enemy(self.enemy_path, self.start_position, self.end_position)
             enemy.health += (self.wave - 1) * self.ENEMY_HEALTH_INCREASE
             enemy.speed += (self.wave - 1) * self.ENEMY_SPEED_INCREASE
             
@@ -515,6 +626,72 @@ class TowerDefenseGame:
             outline='yellow', width=3, tags='selected_tower'
         )
 
+    def draw_start_end(self):
+        if self.start_entity:
+            self.canvas.delete(self.start_entity)
+        if self.end_entity:
+            self.canvas.delete(self.end_entity)
+        
+        if self.start_position:
+            x, y = self.start_position
+            self.start_entity = self.canvas.create_polygon(
+                x - 25, y + 15, x, y - 25, x + 25, y + 15,
+                fill='yellow', outline='black', tags='start'
+            )
+            self.canvas.create_text(
+                x + 2, y + 2, text='S', fill='black', font=("Arial", 16, "bold"), tags='start'
+            )
+            self.canvas.create_text(
+                x, y, text='S', fill='black', font=("Arial", 16, "bold"), tags='start'
+            )
+        
+        if self.end_position:
+            x, y = self.end_position
+            self.end_entity = self.canvas.create_polygon(
+                x - 25, y - 15, x, y + 25, x + 25, y - 15,
+                fill='yellow', outline='black', tags='end'
+            )
+            self.canvas.create_text(
+                x + 2, y + 2, text='E', fill='black', font=("Arial", 16, "bold"), tags='end'
+            )
+            self.canvas.create_text(
+                x, y, text='E', fill='black', font=("Arial", 16, "bold"), tags='end'
+            )
+
+    def draw_arrows_on_path(self):
+        if not self.editor_mode:
+            return
+
+        # Clear previous arrows
+        self.canvas.delete('arrow')
+
+        # Draw arrows along the path
+        if len(self.enemy_path) > 1:
+            num_arrows = 1  # Number of arrows to draw
+            for i in range(num_arrows):
+                t = (i / num_arrows) + (time.time() % 1)  # Animate arrows smoothly
+                if t >= 1:
+                    t -= 1
+
+                # Get the position on the path
+                x, y = self.interpolate_path(t)
+
+                # Get the direction of the path at this point
+                if t < 1:
+                    next_x, next_y = self.interpolate_path(t + 0.01)
+                    dx = next_x - x
+                    dy = next_y - y
+                    angle = math.degrees(math.atan2(dy, dx))
+
+                    # Draw the arrow
+                    self.canvas.create_line(
+                        x, y, x + dx * 10, y + dy * 10,
+                        arrow=tk.LAST, fill='black', width=2, tags='arrow'
+                    )
+
+        # Schedule the next update
+        self.root.after(100, self.draw_arrows_on_path)
+
 class Tower:
     def __init__(self, x, y):
         self.x = x
@@ -554,28 +731,43 @@ class Tower:
         self.range += 25  # Increase range
 
 class Enemy:
-    def __init__(self, path):
+    def __init__(self, path, start_position, end_position):
         self.path = path
         self.current_point = 0
-        self.x, self.y = path[0]
+        self.x, self.y = start_position
         self.speed = 2  # Base speed
         self.health = 100  # Base health
         self.reached_end = False
+        self.end_position = end_position
     
     def update(self):
         if self.current_point < len(self.path) - 1:
+            # Move toward the next point in the path
             target_x, target_y = self.path[self.current_point + 1]
             dx = target_x - self.x
             dy = target_y - self.y
             distance = math.sqrt(dx**2 + dy**2)
             
             if distance < self.speed:
+                # If close enough to the next point, move to the next point
                 self.current_point += 1
+                self.x, self.y = self.path[self.current_point]
             else:
+                # Move toward the next point
                 self.x += (dx / distance) * self.speed
                 self.y += (dy / distance) * self.speed
         else:
-            self.reached_end = True
+            # Move toward the end position
+            end_x, end_y = self.end_position
+            dx = end_x - self.x
+            dy = end_y - self.y
+            distance = math.sqrt(dx**2 + dy**2)
+            
+            if distance < self.speed:
+                self.reached_end = True
+            else:
+                self.x += (dx / distance) * self.speed
+                self.y += (dy / distance) * self.speed
 
 class Projectile:
     def __init__(self, x, y, target):
