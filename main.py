@@ -156,7 +156,7 @@ class TowerDefenseGame:
 
         self.view_menu = tkinter.Menu(self.settings_menu, tearoff=0)
         self.settings_menu.add_cascade(label="Settings", menu=self.view_menu)
-        self.view_menu.add_checkbutton(label="Show Enemy Health", command=self.toggle_enemy_health_visibility,
+        self.view_menu.add_checkbutton(label="Don't Show Enemy Health", command=self.toggle_enemy_health_visibility,
                                        variable=tkinter.BooleanVar(value=self.show_enemy_health))
 
         # Add the 'Help' menu
@@ -165,7 +165,7 @@ class TowerDefenseGame:
         self.help_menu.add_command(label="About", command=self.show_about)
 
     def load_images(self):
-        # Create placeholder images (in a real game, you'd load actual images)
+        # Create placeholder images
         self.tower_image = self.create_circle_image(25, 'blue')
         self.enemy_image = self.create_circle_image(15, 'red')
         self.projectile_image = self.create_circle_image(5, 'yellow')
@@ -615,7 +615,7 @@ class TowerDefenseGame:
             self.canvas.create_line(
                 tower.x, tower.y,
                 turret_end_x, turret_end_y,
-                fill='black', width=4, tags='game_object'
+                fill='white', width=4, tags='game_object'
             )
 
             # Draw the tower level
