@@ -161,7 +161,7 @@ class TowerDefenseGame:
     def canvas_clicked(self, event):
         if not self.editor_mode:
             return
-            
+
         x, y = event.x, event.y
         if self.selected_tool == "path":
             self.enemy_path.append((x, y))
@@ -170,15 +170,23 @@ class TowerDefenseGame:
             # Snap to grid
             grid_x = round(x / self.GRID_SIZE) * self.GRID_SIZE
             grid_y = round(y / self.GRID_SIZE) * self.GRID_SIZE
-            
+
             # Check if tower already exists at this location
             for tower in self.towers:
                 if tower.x == grid_x and tower.y == grid_y:
                     return
-                    
+
             self.towers.append(Tower(grid_x, grid_y))
             self.money -= self.TOWER_COST
             self.update_labels()
+        else:
+            # Check if a tower is clicked for selection
+            for tower in self.towers:
+                # Check if the click is within the tower's bounding box
+                if (tower.x - 25 <= x <= tower.x + 25 and
+                    tower.y - 25 <= y <= tower.y + 25):
+                    self.select_tower(tower)
+                    return
     
     def update_preview(self, event):
         if not self.editor_mode:
@@ -490,12 +498,22 @@ class TowerDefenseGame:
             self.money -= self.UPGRADE_COST
             self.update_labels()
             messagebox.showinfo("Upgrade", f"Tower upgraded!\nDamage: {self.selected_tower.damage}, Range: {self.selected_tower.range}")
+            # Remove the highlight after upgrading
+            self.canvas.delete('selected_tower')
+            self.selected_tower = None
         else:
             messagebox.showerror("Error", "Not enough money to upgrade tower or no tower selected!")
 
     def select_tower(self, tower):
         self.selected_tower = tower
         messagebox.showinfo("Tower Selected", f"Tower at ({tower.x}, {tower.y}) selected for upgrade.")
+        # Highlight the selected tower
+        self.canvas.delete('selected_tower')  # Clear previous highlight
+        self.canvas.create_oval(
+            tower.x - 27, tower.y - 27,
+            tower.x + 27, tower.y + 27,
+            outline='yellow', width=3, tags='selected_tower'
+        )
 
 class Tower:
     def __init__(self, x, y):
