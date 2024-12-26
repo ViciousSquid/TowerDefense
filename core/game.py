@@ -58,9 +58,8 @@ class TowerDefenseGame:
         # Tower selection
         self.selected_tower = None  # Track the currently selected tower
 
-        # Start and End entities
-        self.start_entity = None
-        self.end_entity = None
+        # Rare enemy announcement
+        self.rare_enemy_announcement = None
 
         setup_user_interface(self)
         load_images(self)
@@ -88,34 +87,6 @@ class TowerDefenseGame:
             self.towers.append(Tower(grid_x, grid_y))
             self.money -= self.TOWER_COST
             self.update_labels()
-        elif self.selected_tool == "start":
-            if self.start_entity:
-                self.canvas.delete(self.start_entity)
-            self.start_entity = self.canvas.create_polygon(
-                x - 25, y + 15, x, y - 25, x + 25, y + 15,
-                fill='yellow', outline='black', tags='start'
-            )
-            self.canvas.create_text(
-                x + 2, y + 2, text='S', fill='black', font=("Arial", 16, "bold"), tags='start'
-            )
-            self.canvas.create_text(
-                x, y, text='S', fill='black', font=("Arial", 16, "bold"), tags='start'
-            )
-            self.start_position = (x, y)
-        elif self.selected_tool == "end":
-            if self.end_entity:
-                self.canvas.delete(self.end_entity)
-            self.end_entity = self.canvas.create_polygon(
-                x - 25, y - 15, x, y + 25, x + 25, y - 15,
-                fill='yellow', outline='black', tags='end'
-            )
-            self.canvas.create_text(
-                x + 2, y + 2, text='E', fill='black', font=("Arial", 16, "bold"), tags='end'
-            )
-            self.canvas.create_text(
-                x, y, text='E', fill='black', font=("Arial", 16, "bold"), tags='end'
-            )
-            self.end_position = (x, y)
         else:
             # Check if a tower is clicked for selection
             for tower in self.towers:
@@ -163,8 +134,6 @@ class TowerDefenseGame:
         level_data = {
             "path": self.enemy_path,
             "towers": [(tower.x, tower.y) for tower in self.towers],
-            "start": self.start_position,
-            "end": self.end_position
         }
 
         # Create the levels folder if it doesn't exist
@@ -195,34 +164,6 @@ class TowerDefenseGame:
         if len(path) > 1:
             scaled_path = [(x * scale_factor, y * scale_factor) for x, y in path]
             draw.line(scaled_path, fill="blue", width=2)
-
-        # Draw the START position
-        start_x, start_y = level_data["start"]
-        scaled_start = (start_x * scale_factor, start_y * scale_factor)
-        draw.polygon(
-            [
-                (scaled_start[0] - 5, scaled_start[1] + 5),
-                (scaled_start[0], scaled_start[1] - 5),
-                (scaled_start[0] + 5, scaled_start[1] + 5),
-            ],
-            fill="yellow",
-            outline="black",
-        )
-        draw.text(scaled_start, "S", fill="black", anchor="mm")
-
-        # Draw the END position
-        end_x, end_y = level_data["end"]
-        scaled_end = (end_x * scale_factor, end_y * scale_factor)
-        draw.polygon(
-            [
-                (scaled_end[0] - 5, scaled_end[1] - 5),
-                (scaled_end[0], scaled_end[1] + 5),
-                (scaled_end[0] + 5, scaled_end[1] - 5),
-            ],
-            fill="yellow",
-            outline="black",
-        )
-        draw.text(scaled_end, "E", fill="black", anchor="mm")
 
         # Draw the towers
         for tower_x, tower_y in level_data["towers"]:
@@ -282,10 +223,7 @@ class TowerDefenseGame:
                 level_data = json.load(f)
                 self.enemy_path = level_data["path"]
                 self.towers = [Tower(x, y) for x, y in level_data["towers"]]
-                self.start_position = level_data["start"]
-                self.end_position = level_data["end"]
                 self.draw_path()
-                self.draw_start_end()
             messagebox.showinfo("Success", "Level loaded successfully!")
             load_window.destroy()
         except Exception as e:
@@ -296,8 +234,6 @@ class TowerDefenseGame:
         self.towers = []
         self.enemies = []
         self.projectiles = []
-        self.start_entity = None
-        self.end_entity = None
         self.canvas.delete('all')
 
     def toggle_pause(self):
@@ -404,13 +340,45 @@ class TowerDefenseGame:
                 is_rare = True
 
             # Create enemy with increased stats based on wave number
-            enemy = Enemy(self.enemy_path, self.start_position, self.end_position, is_rare)
+            enemy = Enemy(self.enemy_path, self.enemy_path[0], self.enemy_path[-1], is_rare)
             enemy.health += (self.wave - 1) * self.ENEMY_HEALTH_INCREASE
             enemy.speed += (self.wave - 1) * self.ENEMY_SPEED_INCREASE
 
             self.enemies.append(enemy)
             self.enemies_spawned += 1
             self.last_spawn_time = time.time() * 1000
+
+            # Announce rare enemy appearance
+            if is_rare:
+                self.announce_rare_enemy()
+
+    def announce_rare_enemy(self):
+        if self.rare_enemy_announcement:
+            self.canvas.delete(self.rare_enemy_announcement)
+
+        # Display "A RARE ENEMY APPEARED!" in very big text with a drop shadow
+        self.rare_enemy_announcement = self.canvas.create_text(
+            self.CANVAS_WIDTH // 2, self.CANVAS_HEIGHT // 4,
+            text="A RARE ENEMY APPEARED!",
+            fill="yellow",
+            font=("Arial", 30, "bold"),
+            tags="rare_enemy_announcement"
+        )
+        self.canvas.create_text(
+            self.CANVAS_WIDTH // 2 + 2, self.CANVAS_HEIGHT // 4 + 2,
+            text="A RARE ENEMY APPEARED!",
+            fill="black",
+            font=("Arial", 30, "bold"),
+            tags="rare_enemy_announcement"
+        )
+
+        # Remove the announcement after 2 seconds
+        self.root.after(2000, self.remove_rare_enemy_announcement)
+
+    def remove_rare_enemy_announcement(self):
+        if self.rare_enemy_announcement:
+            self.canvas.delete(self.rare_enemy_announcement)
+            self.rare_enemy_announcement = None
 
     def check_wave_completion(self):
         if (self.wave_in_progress and
@@ -574,38 +542,6 @@ class TowerDefenseGame:
             tower.x + 27, tower.y + 27,
             outline='yellow', width=3, tags='selected_tower'
         )
-
-    def draw_start_end(self):
-        if self.start_entity:
-            self.canvas.delete(self.start_entity)
-        if self.end_entity:
-            self.canvas.delete(self.end_entity)
-
-        if self.start_position:
-            x, y = self.start_position
-            self.start_entity = self.canvas.create_polygon(
-                x - 25, y + 15, x, y - 25, x + 25, y + 15,
-                fill='yellow', outline='black', tags='start'
-            )
-            self.canvas.create_text(
-                x + 2, y + 2, text='S', fill='black', font=("Arial", 16, "bold"), tags='start'
-            )
-            self.canvas.create_text(
-                x, y, text='S', fill='black', font=("Arial", 16, "bold"), tags='start'
-            )
-
-        if self.end_position:
-            x, y = self.end_position
-            self.end_entity = self.canvas.create_polygon(
-                x - 25, y - 15, x, y + 25, x + 25, y - 15,
-                fill='yellow', outline='black', tags='end'
-            )
-            self.canvas.create_text(
-                x + 2, y + 2, text='E', fill='black', font=("Arial", 16, "bold"), tags='end'
-            )
-            self.canvas.create_text(
-                x, y, text='E', fill='black', font=("Arial", 16, "bold"), tags='end'
-            )
 
     def draw_arrows_on_path(self):
         if not self.editor_mode:
